@@ -1,0 +1,61 @@
+mkdir: cannot create directory ‘/n/holystore01/LABS/itc_lab/Users/sjeffreson/NGC300/test-clouds/’: File exists
+INFO:__main__:Analyzing 601 snapshots in the interval /n/holystore01/LABS/itc_lab/Users/sjeffreson/NGC300/density_proj_500 to /n/holystore01/LABS/itc_lab/Users/sjeffreson/NGC300/density_proj_800.png
+/n/home03/sjeffreson/github-portfolio/cloud_id.py:25: RuntimeWarning: invalid value encountered in log10
+  d = Dendrogram.compute(np.log10(LCOmass), min_value=min_value, min_npix=min_npix)
+INFO:__main__:Number of clouds in dendrogram is 437
+INFO:__main__:Clouds 0 to 9
+INFO:__main__:Clouds 10 to 19
+INFO:__main__:Clouds 20 to 29
+INFO:__main__:Clouds 30 to 39
+INFO:__main__:Clouds 40 to 49
+INFO:__main__:Clouds 50 to 59
+INFO:__main__:Clouds 60 to 69
+INFO:__main__:Clouds 70 to 79
+INFO:__main__:Clouds 80 to 89
+INFO:__main__:Clouds 90 to 99
+INFO:__main__:Clouds 100 to 109
+INFO:__main__:Clouds 110 to 119
+INFO:__main__:Clouds 120 to 129
+INFO:__main__:Clouds 130 to 139
+INFO:__main__:Clouds 140 to 149
+INFO:__main__:Clouds 150 to 159
+INFO:__main__:Clouds 160 to 169
+INFO:__main__:Clouds 170 to 179
+INFO:__main__:Clouds 180 to 189
+INFO:__main__:Clouds 190 to 199
+INFO:__main__:Clouds 200 to 209
+INFO:__main__:Clouds 210 to 219
+INFO:__main__:Clouds 220 to 229
+INFO:__main__:Clouds 230 to 239
+INFO:__main__:Clouds 240 to 249
+INFO:__main__:Clouds 250 to 259
+INFO:__main__:Clouds 260 to 269
+INFO:__main__:Clouds 270 to 279
+INFO:__main__:Clouds 280 to 289
+INFO:__main__:Clouds 290 to 299
+INFO:__main__:Clouds 300 to 309
+INFO:__main__:Clouds 310 to 319
+INFO:__main__:Clouds 320 to 329
+INFO:__main__:Clouds 330 to 339
+INFO:__main__:Clouds 340 to 349
+INFO:__main__:Clouds 350 to 359
+INFO:__main__:Clouds 360 to 369
+INFO:__main__:Clouds 370 to 379
+INFO:__main__:Clouds 380 to 389
+INFO:__main__:Clouds 390 to 399
+INFO:__main__:Clouds 400 to 409
+INFO:__main__:Clouds 410 to 419
+INFO:__main__:Clouds 420 to 429
+INFO:__main__:Clouds 430 to 436
+INFO:__main__:44
+INFO:__main__:437
+Traceback (most recent call last):
+  File "/n/home03/sjeffreson/github-portfolio/cloud_id.py", line 286, in <module>
+    main(
+  File "/n/home03/sjeffreson/github-portfolio/cloud_id.py", line 132, in main
+    d = get_galaxy_dendrogram(LCOimgname, imgname, min_value = float(args.logminvalue), min_npix = int(args.minpix))
+  File "/n/home03/sjeffreson/github-portfolio/cloud_id.py", line 18, in get_galaxy_dendrogram
+    LCOimg = ah.get_image_data(LCOimgname)
+  File "/n/home03/sjeffreson/github-portfolio/astro_helper.py", line 19, in get_image_data
+    with open(filename, "rb") as f:
+FileNotFoundError: [Errno 2] No such file or directory: '/n/holystore01/LABS/itc_lab/Users/sjeffreson/NGC300/LCO_proj_500.png'

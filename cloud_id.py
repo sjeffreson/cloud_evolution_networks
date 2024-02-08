@@ -1,4 +1,4 @@
-cloud_id.pyimport sys, os, glob, re
+import sys, os, glob, re
 regex = re.compile(r"\d+")
 import numpy as np
 import argparse, logging
@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 import multiprocessing
 from functools import partial
 from contextlib import contextmanager
+
+import pickle
 
 import h5py
 import astrodendro
@@ -146,37 +148,7 @@ def main(imgnames, width, rsln_px, prefix, logminvalue, minpix, Ncores):
         print("done with mask computation")
 
         # the snapshot contains all the gas particle information
-        snap = h5py.File(imgname.replace("density_proj", "snap-DESPOTIC")+".hdf5", "r")
-        header = snap["Header"]
-        gas = snap["PartType0"]
-
-        x_coords = (gas['Coordinates'][:,0] - 0.5 * header.attrs['BoxSize']) * gas['Coordinates'].attrs['to_cgs']
-        y_coords = (gas['Coordinates'][:,1] - 0.5 * header.attrs['BoxSize']) * gas['Coordinates'].attrs['to_cgs']
-        R_coords = np.sqrt(x_coords*x_coords + y_coords*y_coords)
-        z_coords = (gas['Coordinates'][:,2] - 0.5 * header.attrs['BoxSize']) * gas['Coordinates'].attrs['to_cgs']
-        cnd = (np.fabs(x_coords) < width*ah.kpc_to_cm/2.) & (np.fabs(y_coords) < width*ah.kpc_to_cm/2.)
-
-        snap_data = {}
-        snap_data["time"] = header.attrs["Time"]
-        snap_data["x_coords"] = x_coords[cnd]
-        snap_data["y_coords"] = y_coords[cnd]
-        snap_data["z_coords"] = z_coords[cnd]
-        snap_data["R_coords"] = R_coords[cnd]
-        snap_data["velxs"] = gas['Velocities'][:,0][cnd] * gas['Velocities'].attrs['to_cgs']
-        snap_data["velys"] = gas['Velocities'][:,1][cnd] * gas['Velocities'].attrs['to_cgs']
-        snap_data["velzs"] = gas['Velocities'][:,2][cnd] * gas['Velocities'].attrs['to_cgs']
-        snap_data["masses"] = gas['Masses'][:][cnd] * gas['Masses'].attrs['to_cgs']
-        snap_data["IH2s"] = gas['ChemicalAbundances'][:,0][cnd]
-        snap_data["voldenses"] = gas['Density'][:][cnd] * gas['Density'].attrs['to_cgs']
-        snap_data["Us"] = gas['InternalEnergy'][:][cnd] * gas['InternalEnergy'].attrs['to_cgs']
-        snap_data["temps"] = (ah.gamma - 1.) * snap_data["Us"]/ah.kB_cgs * ah.mu * ah.mp_cgs
-        snap_data["SFRs"] = gas['StarFormationRate'][:][cnd] * gas['StarFormationRate'].attrs['to_cgs']
-
-        # digitize onto grid of size rsln_px x rsln_px
-        x_bin_edges = np.linspace(-width*ah.kpc_to_cm/2., width*ah.kpc_to_cm/2., rsln_px+1)
-        y_bin_edges = np.linspace(width*ah.kpc_to_cm/2., -width*ah.kpc_to_cm/2., rsln_px+1)
-        snap_data["x_bin_idx"] = np.digitize(snap_data["x_coords"], x_bin_edges)-1
-        snap_data["y_bin_idx"] = np.digitize(snap_data["y_coords"], y_bin_edges)-1
+        snap_data = ah.get_gas_info_from_snap(imgname.replace("density_proj", "snap-DESPOTIC")+".hdf5", width, rsln_px)
 
         # divide clouds (branches) into groups for the number of cores
         N_pergroup = int(np.ceil(len(masks_where)/Ncores))
@@ -198,9 +170,13 @@ def main(imgnames, width, rsln_px, prefix, logminvalue, minpix, Ncores):
         clouds_dict = {
             key: ah.flatten_list([clouds_dict[i][key] for i in range(len(clouds_dict))]) for key in clouds_dict[0].keys()
         }
-        logger.info(len(clouds_dict["particles"]))
 
-        np.save(args.prefix + "_" + regex.findall(imgname)[-1] + ".npy", clouds_dict)
+        with open(args.prefix + "_" + regex.findall(imgname)[-1] + ".pickle", 'wb') as f:
+            pickle.dump(clouds_dict, f)
+    
+        logger.info(
+            "Cloud properties for snapshot saved to file {:s}".format(args.prefix + "_" + regex.findall(imgname)[-1] + ".pickle")
+        )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -258,7 +234,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # Check if input dir exists
     if not os.path.exists(args.input):
         logger.critical(
             "Input folder cannot be found: {:s}".format(args.input)
@@ -276,6 +251,9 @@ if __name__ == "__main__":
         imgname for imgname, imgno, exist in zip(imgnames, imgnos, exists)
         if not exist and int(imgno) >= int(args.begsnapno) and int(imgno) <= int(args.endsnapno)
     ]
+    if len(imgnames_cut) == 0:
+        logger.info("No images to analyze")
+        exit()
 
     logger.info(
         "Analyzing {:d} snapshots in the interval {:s} to {:s}".format(

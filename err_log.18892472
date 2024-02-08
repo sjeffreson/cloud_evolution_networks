@@ -1,0 +1,2 @@
+mkdir: cannot create directory ‘/n/holystore01/LABS/itc_lab/Users/sjeffreson/NGC300/test-clouds/’: File exists
+slurmstepd: error: *** JOB 18892472 ON holy8a31604 CANCELLED AT 2024-02-07T16:21:15 ***
