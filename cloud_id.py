@@ -103,7 +103,7 @@ def clouds_for_one_img(mask_idcs_group, snap_data=None, masks_where=None, rsln_p
             angmomx_cl = np.average(yrelCs_cl * vzrelCs_cl - zrelCs_cl * vyrelCs_cl, weights=masses_cl)
             angmomy_cl = np.average(zrelCs_cl * vxrelCs_cl - xrelCs_cl * vzrelCs_cl, weights=masses_cl)
             angmomz_cl = np.average(xrelCs_cl * vyrelCs_cl - yrelCs_cl * vxrelCs_cl, weights=masses_cl)
-            angmomR_cl = (-angmomx_cl * xrelCs_cl - angmomy_cl * yrelCs_cl) / np.sqrt(xrelCs_cl**2 + yrelCs_cl**2)
+            angmomR_cl = (-angmomx_cl * xC_cl - angmomy_cl * yC_cl) / np.sqrt(xC_cl**2 + yC_cl**2)
 
             # temperature
             temp_cl = np.average(snap_data["temps"][cloud], weights=masses_cl)
@@ -113,7 +113,7 @@ def clouds_for_one_img(mask_idcs_group, snap_data=None, masks_where=None, rsln_p
 
             # save to dictionary
             clouds_dict["particles"].append(np.array(cloud))
-            clouds_dict["mask"].append(cloud_mask)
+            clouds_dict["mask"].append(mask_where)
             clouds_dict["centroid"].append(np.array([xC_cl, yC_cl, zC_cl]))
             clouds_dict["vcentroid"].append(np.array([vxC_cl, vyC_cl, vzC_cl]))
             clouds_dict["mass"].append(np.sum(masses_cl))
