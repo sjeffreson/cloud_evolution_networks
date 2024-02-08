@@ -1,5 +1,0 @@
-mkdir: cannot create directory ‘/n/holystore01/LABS/itc_lab/Users/sjeffreson/NGC300/test-clouds/’: File exists
-Traceback (most recent call last):
-  File "/n/home03/sjeffreson/cloud_evolution_networks/cloud_id.py", line 254, in <module>
-    len(imgnames_cut), imgnames_cut[0], imgnames_cut[-1]
-IndexError: list index out of range
