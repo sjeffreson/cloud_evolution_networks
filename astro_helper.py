@@ -8,6 +8,7 @@ Gyr_to_s = 3.15576E16
 Msol_to_g = 1.99E33
 kpc_to_cm = 3.086E21
 pc_to_cm = 3.086E18
+kms_to_cms = 1E5
 LCO_to_H2mass = 2.7E28
 gamma = 5./3.
 kB_cgs = 1.38E-16
@@ -63,7 +64,7 @@ def get_gas_info_from_snap(snapname, width, rsln_px):
 	# digitize onto grid of size rsln_px x rsln_px
 	x_bin_edges = np.linspace(-width*kpc_to_cm/2., width*kpc_to_cm/2., rsln_px+1)
 	y_bin_edges = np.linspace(width*kpc_to_cm/2., -width*kpc_to_cm/2., rsln_px+1)
-	snap_data["x_bin_idx"] = np.digitize(snap_data["x_coords"], x_bin_edges)-1
-	snap_data["y_bin_idx"] = np.digitize(snap_data["y_coords"], y_bin_edges)-1
+	snap_data["x_bin_idx"] = np.digitize(snap_data["x_coords"], x_bin_edges)
+	snap_data["y_bin_idx"] = np.digitize(snap_data["y_coords"], y_bin_edges)
 
 	return snap_data
