@@ -11,14 +11,7 @@ from scipy.stats import binned_statistic_2d
 import networkx as nx
 import astro_helper as ah
 
-def sort_by_time(nodes, times):
-    sidx = np.argsort(times)
-    split_idx = np.flatnonzero(np.diff(np.take(times,sidx))>0)+1
-    out = np.split(np.take(nodes,sidx,axis=0), split_idx)
-    out = [list(elem) for elem in out]
-    return out
-
-def main(input_path, snap_list, cloudfile_list, width_kpc, rsln_px):
+def main(input_path, snap_list, cloudfile_list, width, rsln_px):
 
     # initialize empty graph
     G = nx.DiGraph()
@@ -26,12 +19,12 @@ def main(input_path, snap_list, cloudfile_list, width_kpc, rsln_px):
     prevtime = 0.
 
     for snap, cloudfile in zip(snap_list, cloudfile_list):
-        snap_data = ah.get_gas_info_from_snap(snap, width_kpc, rsln_px)
+        snap_data = ah.get_gas_info_from_snap(snap, width, rsln_px)
         with open(cloudfile, 'rb') as f:
             cloud_dict_of_lists = pickle.load(f)
         cloud_attr_dicts = [dict(zip(cloud_dict_of_lists, v)) for v in zip(*cloud_dict_of_lists.values())]
         cloud_lens = [len(c['particles']) for c in cloud_attr_dicts]
-        cloud_ids = [str(i) for i in range(min_cloud_id, len(cloud_attr_dicts))]
+        cloud_ids = [i for i in range(min_cloud_id, min_cloud_id+len(cloud_attr_dicts))]
 
         # add nodes to graph
         G.add_nodes_from(cloud_ids)
@@ -50,41 +43,52 @@ def main(input_path, snap_list, cloudfile_list, width_kpc, rsln_px):
         # of their particles, and bin for comparison to current masks
         deltat = (snap_data['time'] - prevtime) * ah.Gyr_to_s
 
-        x_bin_edges = np.linspace(-width_kpc/2.*kpc_to_cm, width_kpc/2.*kpc_to_cm, rsln_px+1)
-        y_bin_edges = np.linspace(width_kpc/2.*kpc_to_cm, -width_kpc/2.*kpc_to_cm, rsln_px+1)
+        x_bin_edges = np.linspace(-width*ah.kpc_to_cm/2., width*ah.kpc_to_cm/2., rsln_px+1)
+        y_bin_edges = np.linspace(width*ah.kpc_to_cm/2., -width*ah.kpc_to_cm/2., rsln_px+1)
 
-        pixel_ids_proj = {}
+        pixel_ids_proj = {} # pixels that contain part of a projected cloud
         for id, attrs, in zip(cloud_ids, cloud_attr_dicts):
             xproj = snap_data['x_coords'][attrs['particles']] - deltat * snap_data['velxs'][attrs['particles']]
             yproj = snap_data['y_coords'][attrs['particles']] - deltat * snap_data['velys'][attrs['particles']]
 
-            cnd = (np.fabs(xproj) < width*kpc_to_cm/2.) & (np.fabs(yproj) < width*kpc_to_cm/2.)
-            xproj_bin_idcs = np.digitize(xproj[cnd], bins=x_bin_edges)-1
-            yproj_bin_idcs = np.digitize(yproj[cnd], bins=y_bin_edges)-1
-            pxsproj = yproj_bin_idcs * rsln_px + xproj_bin_idcs
+            cnd = (np.fabs(xproj) < width*ah.kpc_to_cm/2.) & (np.fabs(yproj) < width*ah.kpc_to_cm/2.)
+            xproj_bin_idcs = np.digitize(xproj[cnd], bins=x_bin_edges)
+            yproj_bin_idcs = np.digitize(yproj[cnd], bins=y_bin_edges)
+            pxsproj = (xproj_bin_idcs-1) * rsln_px + (yproj_bin_idcs-1) # recall 90-degree rotation of masks
             for pxproj in pxsproj:
                 if pxproj in pixel_ids_proj:
-                    pixel_ids_proj[pxproj].append(id) # pixels which the projected clouds overlap
+                    pixel_ids_proj[pxproj].append(id)
                 else:
                     pixel_ids_proj[pxproj] = [id]
 
-        # similar pixel dictionary from the real positions of the previous clouds
+        # now see which pixels are occupied by clouds in the previous snapshot, for comparison
+        # NOTE: only one previous cloud can occupy a pixel
         G_inttimes = nx.get_node_attributes(G, 'inttime')
         G_masks = nx.get_node_attributes(G, 'mask')
         G_masks_prev = {id: mask for id, mask in G_masks.items() if G_inttimes[id] == previnttime}
 
-        pixel_ids_prev = {}
+        pixel_ids_prev = {} # pixels that contain part of a real cloud during the previous time-step
         for id, mask in G_masks_prev.items():
             xprev_bin_idcs, yprev_bin_idcs = mask
             pxsprev = yprev_bin_idcs * rsln_px + xprev_bin_idcs
             for pxprev in pxsprev:
-                pixel_ids_prev[pxprev] = id # there's only one previous cloud on each pixel (true position)
+                pixel_ids_prev[pxprev] = id
 
         # compare the pixel dictionaries and link cloud ids that share a pixel
+        new_edges = []
         for px, proj_ids in pixel_ids_proj.items():
-            prev_id = pixel_ids_prev[px]
-            for proj_id in proj_ids:
-                G.add_edge(prev_id, proj_id)
+            if px in pixel_ids_prev:
+                prev_id = pixel_ids_prev[px]
+                for proj_id in proj_ids:
+                    new_edges.append((prev_id, proj_id))
+        new_edges = set(new_edges)
+        G.add_edges_from(new_edges)
+
+        logger.info(
+            "Added {:d} edges between clouds in snapshot {:s} and snapshot {:s}".format(
+                len(new_edges), str(int(previnttime)), str(int(np.round(snap_data['time']*ah.Gyr_to_Myr)))
+            )
+        )
 
         # update the previous time
         min_cloud_id = cloud_ids[-1]+1
@@ -92,7 +96,11 @@ def main(input_path, snap_list, cloudfile_list, width_kpc, rsln_px):
         previnttime = int(np.round(snap_data['time']*ah.Gyr_to_Myr))
 
     # save merger tree
-    nx.write_gpickle(G, os.path.join(input_path, "merger_tree.pkl"))
+    with open(os.path.join(input_path, "merger_tree_"+str(args.begsnapno)+"-"+str(args.endsnapno)+".pkl"), "wb") as f:
+        pickle.dump(G, f, pickle.HIGHEST_PROTOCOL)
+    logger.info(
+        "Saved merger tree to {:s}".format(os.path.join(input_path, "merger_tree_"+str(args.begsnapno)+"-"+str(args.endsnapno)+".pkl"))
+    )
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

@@ -19,6 +19,7 @@ mu = 1.4
 ArepoMass_to_g = 1.989E43
 ArepoLength_to_cm = 3.085678E21
 
+# get image array from output of Arepo ray-tracing routine
 def get_image_data(filename):
 	with open(filename, "rb") as f:
 		xpix = np.fromfile(f, dtype=np.int32, count=1)[0]
@@ -28,12 +29,14 @@ def get_image_data(filename):
 	img = np.rot90(img)
 	return img
 
+# np.flatten() for lists
 def flatten_list(lst):
     if type(lst[0])==list:
         return [item for sublist in lst for item in sublist]
     else:
         return lst
 
+# get gas info from Arepo snapshot
 def get_gas_info_from_snap(snapname, width, rsln_px):
 	snap = h5py.File(snapname, "r")
 	header = snap["Header"]
@@ -68,3 +71,12 @@ def get_gas_info_from_snap(snapname, width, rsln_px):
 	snap_data["y_bin_idx"] = np.digitize(snap_data["y_coords"], y_bin_edges)
 
 	return snap_data
+
+# order the nodes in a NetworkX graph by time, where time is a node attribute
+# for plotting and analyzing the graph
+def sort_by_time(nodes, times):
+	sidx = np.argsort(times)
+	split_idx = np.flatnonzero(np.diff(np.take(times,sidx))>0)+1
+	out = np.split(np.take(nodes,sidx,axis=0), split_idx)
+	out = [list(elem) for elem in out]
+	return out
