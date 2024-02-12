@@ -3,7 +3,7 @@ Pipeline to generate a directed graph of the time evolution of all star-forming 
 
 As of February 2024, all code has been tested using Python 3.10.
 
-## Cloud identification: `cloud_id.py`
+## `cloud_id.py`: Cloud identification
 
 ### Dependencies
 This script uses the [h5py](https://www.h5py.org/) package to read the galaxy snapshots (hdf5 format). It also uses the [astrodendro](https://github.com/dendrograms/astrodendro/tree/stable) package. Note that Astrodendro has not been updated for 8 years and so contains some deprecated features that might show up when the package is imported, but which are easily fixed.
@@ -37,7 +37,7 @@ These definitions and default values can all be accessed via `python3 cloud_id.p
 ### Checking outputs
 Key properties of the output dictionaries can be checked `check_cloud-ID.ipynb`.
 
-## Cloud tracking to produce cloud evolution network: `cloud_track.py`
+## `cloud_track.py`: Cloud tracking to produce cloud evolution network
 
 ### Dependencies
 In addition to h5py, this script uses the [NetworkX](https://networkx.org/documentation/stable/index.html) network/graph analysis software.
