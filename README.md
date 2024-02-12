@@ -43,7 +43,7 @@ Key properties of the output dictionaries can be checked `check_cloud-ID.ipynb`.
 In addition to h5py, this script uses the [NetworkX](https://networkx.org/documentation/stable/index.html) network/graph analysis software.
 
 ### Inputs
-- A set of hdf5 snapshots of an isolated galaxy simulation, containing a mesh of gas particles with centroid positions, velocities etc.
+- A set of hdf5 snapshots of an isolated galaxy simulation, containing a mesh of gas particles with centroid positions, velocities etc. Note that these _must_ form a continuous set with a fixed time-step.
 - The set of cloud dictionaries generated via `cloud_id.py`
 
 ### Running
