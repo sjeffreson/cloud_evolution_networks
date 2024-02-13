@@ -1,48 +1,68 @@
 import h5py
 import numpy as np
 import glob, os, re, sys
+from typing import List, Dict
 from multiprocessing import Process
+import pickle
 
 import networkx as nx
 import astro_helper as ah
 
-DEFAULT_OUTPUT_DIR = Path("/n/holystore01/LABS/itc_lab/Users/sjeffreson/NGC300/MC-iterations/")
-class MergertreeProp:
-    '''Analysis of cloud evolution network properties'''
-    def __init__(
-        self,
-        DiGraph: nx.DiGraph,
+DEFAULT_INPUT_DIR = "/n/holystore01/LABS/itc_lab/Users/sjeffreson/NGC300/"
+DEFAULT_OUTPUT_DIR = "/n/holystore01/LABS/itc_lab/Users/sjeffreson/NGC300/MC-iterations/"
+class MergertreeProps:
+	'''Analysis of cloud evolution network properties. Note that the particles
+	and mask attributes are for adding properties to cloud arrays after the fact,
+	and so are not analyzed as cloud properties.'''
+	def __init__(
+		self,
+		DiGraph: str,
 		min_resolved_time: int = 0,
 		min_radius: float = 0.,
 		num_mc_iter: int = None,
 		num_mc_workers: int = None,
     ):
-        self.DiGraph = DiGraph
+		with open(DEFAULT_INPUT_DIR+'/'+DiGraph, 'rb') as f:
+			self.DiGraph = pickle.load(f)
 		first_node = next(iter(self.DiGraph.nodes()))
-		self.all_attr_keys = self.DiGraph.nodes[first_node].keys()
+		self.all_attr_keys = self.DiGraph.nodes[first_node].keys() - set(['particles', 'mask'])
 		self.timestep = np.mean(np.diff(sorted(np.unique(list(nx.get_node_attributes(self.DiGraph, 'time').values())))))
-		xs_cent, ys_cent = zip(*list(nx.get_node_attributes(self.DiGraph, 'centroid').values()))
-        self.width = 2.*np.max(np.sqrt(np.array(xs_cent)**2 + np.array(ys_cent)**2))
-		self.min_resolved_time = min_temp_length
+		xs_cent, ys_cent, zs_cent = zip(*list(nx.get_node_attributes(self.DiGraph, 'centroid').values()))
+		self.width = 2.*np.max(np.sqrt(np.array(xs_cent)**2 + np.array(ys_cent)**2))
+		self.min_resolved_time = min_resolved_time
 		self.min_radius = min_radius
 		self.num_mc_iter = num_mc_iter
 		self.num_mc_workers = num_mc_workers
-        
-	def cut_wcs(self, DiGraph, time_cut: bool=True, radius_cut: bool=True, time_rsln_cut: bool=True):
+
+	def get_timestep(self) -> float:
+		'''return the timestep of the cloud evolution network'''
+		return self.timestep
+
+	def get_width(self) -> float:
+		'''return the width of the cloud evolution network'''
+		return self.width
+
+	def get_cloud_evol_network(self) -> nx.DiGraph:
+		'''return the full cloud evolution network, cut to specifications
+		if cut_wcs has been used'''
+		return self.DiGraph
+
+	def cut_wcs(self, time_cut: bool=True, radius_cut: bool=True, time_rsln_cut: bool=True):
 		'''remove weakly-connected components of the directed graph that touch the
 		minimum/maximum time, as these may be incomplete'''
 
-		wcs = nx.weakly_connected_components(DiGraph)
+		wcs = nx.weakly_connected_components(self.DiGraph)
+
+		time_dict = nx.get_node_attributes(self.DiGraph, 'time')
+		min_time, max_time = np.min(list(time_dict.values())), np.max(list(time_dict.values()))
 
 		wcs_cmplt, wcs_cmplt_lens = [], []
 		for wc in wcs:
-			G_wc = DiGraph.subgraph(wc)
+			G_wc = self.DiGraph.subgraph(wc)
 
 			cnd = True
 			if time_cut:
-				time_dict = nx.get_node_attributes(DiGraph, 'time')
-				min_time, max_time = np.min(list(time_dict.values())), np.max(list(time_dict.values()))
-				times_wc = np.unique(list(nx.get_node_attributes(G_wc, 'time').values()))
+				times_wc = list(nx.get_node_attributes(G_wc, 'time').values())
 				min_time_wc, max_time_wc = np.min(times_wc), np.max(times_wc)
 				cnd = cnd & (min_time_wc > min_time) & (max_time_wc < max_time)
 			if radius_cut:
@@ -51,9 +71,9 @@ class MergertreeProp:
 				ys_cent_wc = np.array(list(ys_cent_wc))
 				Rs_cent_wc = np.sqrt(xs_cent_wc**2 + ys_cent_wc**2)
 				min_radius_wc, max_radius_wc = np.min(Rs_cent_wc), np.max(Rs_cent_wc)
-				cnd = cnd & (max_radius_wc < width/2.) & (min_radius_wc > self.min_radius)
+				cnd = cnd & (max_radius_wc < self.width/2.) & (min_radius_wc > self.min_radius)
 			if time_rsln_cut:
-				times_wc = np.unique(list(nx.get_node_attributes(G_wc, 'time').values()))
+				times_wc = list(nx.get_node_attributes(G_wc, 'time').values())
 				min_time_wc, max_time_wc = np.min(times_wc), np.max(times_wc)
 				cnd = cnd & (max_time_wc - min_time_wc > self.min_resolved_time)
 	
@@ -61,21 +81,10 @@ class MergertreeProp:
 				wcs_cmplt.append(list(wc))
 				wcs_cmplt_lens.append(len(list(wc)))
 
-		G_cmplt = DiGraph.subgraph(set(ah.flatten_list(wcs_cmplt)))
+		G_cmplt = self.DiGraph.subgraph(set(ah.flatten_list(wcs_cmplt)))
 		self.DiGraph = G_cmplt
 
-	def set_mc_rand_nos(self, mc_no) -> Dict[str, float]:
-		'''get a random number for each node in the graph, with a given random seed'''
-		np.random.seed(mc_no)
-		r = np.random.uniform(size=len(self.nodes))
-		return {node: r for node, r in zip(self.nodes, r)}
-
-	def get_cloud_evol_network(self) -> nx.DiGraph:
-		'''return the full cloud evolution network, cut to specifications
-		if cut_wcs has been used'''
-		return self.DiGraph
-
-	def get_cloud_evol_wcs(self, extensive_attr_keys: List(str)) -> Dict[str, np.array]:
+	def get_cloud_evol_wcs(self, extensive_attr_keys: List[str]) -> Dict[str, np.array]:
 		'''Get the cloud evolution of a given attribute for clouds defined
 		by the weakly-connected components of the graph. Specify the extensive
 		attributes that are to be summed over the weakly-connected components,
@@ -93,6 +102,7 @@ class MergertreeProp:
 
 			extensive_attrs_wc = {attr: np.array(list(nx.get_node_attributes(G_wc, attr).values())) for attr in extensive_attr_keys}
 			intensive_attrs_wc = {attr: np.array(list(nx.get_node_attributes(G_wc, attr).values())) for attr in intensive_attr_keys}
+			print(np.shape(intensive_attrs_wc['centroid']))
 
 			# make sure the attributes are ordered by the node key
 			extensive_attrs_wc = {attr: np.array([extensive_attrs_wc[attr][nodes_wc.index(node)] for node in nodes_wc]) for attr in extensive_attr_keys}
@@ -105,18 +115,27 @@ class MergertreeProp:
 			for attr in intensive_attr_keys:
 				attrs_wc[attr] = np.array([
 					np.average(intensive_attrs_wc[attr][times_wc==time],
-					weights=extensive_attrs_wc['mass'][times_wc==time]) for time in uniquetimes
+					weights=extensive_attrs_wc['mass'][times_wc==time], axis=0) for time in uniquetimes
 				])
 
-			for attr in all_attr_keys:
+			for attr in self.all_attr_keys:
 				attrs_wcs[attr].append(attrs_wc[attr])
 
 		return {attr: np.array(attrs_wcs[attr]) for attr in all_attr_keys}
+
+	def set_mc_rand_nos(self, mc_no: int) -> Dict[str, float]:
+		'''get a random number for each node in the graph, with a given random seed'''
+		np.random.seed(mc_no)
+		r = np.random.uniform(size=len(self.nodes))
+		return {node: r for node, r in zip(self.nodes, r)}
 
 	def save_cloud_evol_mc(self):
 		'''Save the cloud evolution along Monte Carlo trajectories to disk.
 		Saved to disk so the same computation with the same seeds can be used
 		for different analyses.'''
+		if self.num_mc_iter is None:
+			raise ValueError("instance must specify num_mc_iter and num_mc_workers to use this function")
+
 		self.nodes = self.DiGraph.nodes()
 		self.formnodes = [
 			node for node in self.nodes
@@ -137,7 +156,7 @@ class MergertreeProp:
 
 			mc_iter += self.num_mc_workers
 
-    def mc_iteration(self, mc_no):
+	def mc_iteration(self, mc_no: int):
 		'''function to do a single MC iteration for all clouds/trajectories
 		of the network graph'''
 
@@ -159,7 +178,7 @@ class MergertreeProp:
 				lifetimes.append(lifetime)
 
 		'''function to walk one trajectory through the graph'''
-		def walk_trajectory(node) -> int:
+		def walk_trajectory(node: int) -> int:
 			children = self.DiGraph.successors(node)
 			parents = self.DiGraph.predecessors(node)
 			N_children = self.DiGraph.out_degree(node)
