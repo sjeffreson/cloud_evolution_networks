@@ -7,7 +7,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 import h5py
-from scipy.stats import binned_statistic_2d
 import networkx as nx
 import astro_helper as ah
 
