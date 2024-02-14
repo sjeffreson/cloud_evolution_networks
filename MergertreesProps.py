@@ -34,6 +34,16 @@ class MergertreeProps:
 		self.num_mc_iter = num_mc_iter
 		self.num_mc_workers = num_mc_workers
 
+	def num_self_loops(self) -> int:
+		'''check the number of self-loops in the cloud evolution network
+		(should be 0 if the graph was created correctly)'''
+		no_selfloops = 0
+		for node in self.DiGraph.nodes():
+			if self.DiGraph.has_edge(node, node):
+				no_selfloops += 1
+				self.DiGraph.remove_edge(node, node)
+		return no_selfloops
+
 	def get_timestep(self) -> float:
 		'''return the timestep of the cloud evolution network'''
 		return self.timestep
@@ -96,13 +106,12 @@ class MergertreeProps:
 		wcs = nx.weakly_connected_components(self.DiGraph)
 		for wc in wcs:
 			G_wc = self.DiGraph.subgraph(wc)
-			times_wc = np.unique(list(nx.get_node_attributes(G_wc, 'time').values()))
+			times_wc = list(nx.get_node_attributes(G_wc, 'time').values())
 			nodes_wc = list(G_wc.nodes())
 			uniquetimes, idcs_uniquetimes = np.unique(times_wc, return_index=True)
 
 			extensive_attrs_wc = {attr: np.array(list(nx.get_node_attributes(G_wc, attr).values())) for attr in extensive_attr_keys}
 			intensive_attrs_wc = {attr: np.array(list(nx.get_node_attributes(G_wc, attr).values())) for attr in intensive_attr_keys}
-			print(np.shape(intensive_attrs_wc['centroid']))
 
 			# make sure the attributes are ordered by the node key
 			extensive_attrs_wc = {attr: np.array([extensive_attrs_wc[attr][nodes_wc.index(node)] for node in nodes_wc]) for attr in extensive_attr_keys}
@@ -111,17 +120,17 @@ class MergertreeProps:
 			# sum over extensive, average over intensive
 			attrs_wc = {}
 			for attr in extensive_attr_keys:
-				attrs_wc[attr] = np.array([np.sum(extensive_attrs_wc[attr][times_wc==time]) for time in uniquetimes])
+				attrs_wc[attr] = [np.sum(extensive_attrs_wc[attr][times_wc==time]) for time in uniquetimes]
 			for attr in intensive_attr_keys:
-				attrs_wc[attr] = np.array([
+				attrs_wc[attr] = [
 					np.average(intensive_attrs_wc[attr][times_wc==time],
 					weights=extensive_attrs_wc['mass'][times_wc==time], axis=0) for time in uniquetimes
-				])
+				]
 
 			for attr in self.all_attr_keys:
 				attrs_wcs[attr].append(attrs_wc[attr])
 
-		return {attr: np.array(attrs_wcs[attr]) for attr in all_attr_keys}
+		return {attr: attrs_wcs[attr] for attr in self.all_attr_keys}
 
 	def set_mc_rand_nos(self, mc_no: int) -> Dict[str, float]:
 		'''get a random number for each node in the graph, with a given random seed'''
@@ -139,14 +148,15 @@ class MergertreeProps:
 		self.nodes = self.DiGraph.nodes()
 		self.formnodes = [
 			node for node in self.nodes
-			if self.Digraph.in_degree(node) < self.DiGraph.out_degree(node)
+			if self.DiGraph.in_degree(node) < self.DiGraph.out_degree(node)
 		] # formation nodes are those with more children than parents
 
+		procs = []
 		mc_iter = 0
 		while(mc_iter < self.num_mc_iter):
-			for j in range(mc_iter, min([self.num_mc_iter, i + self.num_mc_workers])):
-				print("thread "+str(j)+" started")
-				p = Process(target=self.mc_iteration, args=(j))
+			for i in range(mc_iter, min([self.num_mc_iter, mc_iter + self.num_mc_workers])):
+				print("thread "+str(i)+" started")
+				p = Process(target=self.mc_iteration, args=(i,))
 				procs.append(p)
 				p.start()
 
@@ -160,25 +170,8 @@ class MergertreeProps:
 		'''function to do a single MC iteration for all clouds/trajectories
 		of the network graph'''
 
-		mc_rand_nos_dict = self.set_mc_rand_nos(mc_no)
-		iterations_dict = {node: 0 for node in self.nodes}
-		attrs_dict = {attr: [] for attr in self.all_attr_keys}
-		lifetimes = []
-
-		edges_visited = []
-		formation_events = 0
-
-		for formnode in self.formnodes: # loop through formation nodes of the graph
-			N_form = self.DiGraph.out_degree(formnode) - self.DiGraph.in_degree(formnode)
-			for j in range(N_form):
-				lifetime = 0.
-				attrs_dict[attr].append([self.DiGraph.nodes[formnode][attr]])
-				formation_events+=1 # book-keeping
-				lifetime = walk_trajectory(formnode)
-				lifetimes.append(lifetime)
-
-		'''function to walk one trajectory through the graph'''
-		def walk_trajectory(node: int) -> int:
+		def walk_trajectory(node: int, lifetime: float) -> int:
+			'''function to walk one trajectory through the graph'''
 			children = self.DiGraph.successors(node)
 			parents = self.DiGraph.predecessors(node)
 			N_children = self.DiGraph.out_degree(node)
@@ -188,10 +181,10 @@ class MergertreeProps:
 			N_term = np.max([0, N_parents-N_children]) # number of MC outcomes resulting in path termination at n
 
 			k = 0 # iterator for the MC option
-			while(mc_rand_nos_dict[node] > k/N_outcomes):
-				k+=1 # partition into which the random no. falls
-			k = (k+iterations_dict[node]) % N_outcomes # if node was accessed before, take the next option
-			iterations_dict[node] += 1 # count number of times node has been accessed
+			while(mc_rand_nos_dict[node] > float(k)/float(N_outcomes)):
+				k += 1 # partition into which the random no. falls
+			k = (k + iterations_dict[node]) % N_outcomes # if node was accessed before, take the next option
+			iterations_dict[node] = iterations_dict[node] + 1 # count number of times node has been accessed
 
 			if(k < N_term): # we terminate the path here
 				return lifetime
@@ -199,26 +192,44 @@ class MergertreeProps:
 				lifetime += self.timestep
 				child = list(children)[k-N_term]
 				for attr in attrs_dict.keys():
-					attrs_dict[attr].append(self.DiGraph.nodes[child][attr])
+					attrs_dict[attr][-1].append(self.DiGraph.nodes[child][attr])
 				edges_visited.append((node, child)) # book-keeping
-				return walk_trajectory(child)
+				return walk_trajectory(child, lifetime)
 
-		'''algorithm checks: (1) no edge is visited more than once,
-		(2) all edges are visited, and (3) number of lifetimes = number
-		of formation events'''
+		mc_rand_nos_dict = self.set_mc_rand_nos(mc_no)
+
+		iterations = np.zeros(len(self.nodes), dtype=int)
+		iterations_dict = {node: i for node, i in zip(self.nodes, iterations)}
+
+		attrs_dict = {attr: [] for attr in self.all_attr_keys}
+		
+		lifetimes = []
+		edges_visited = []
+		formation_events = 0
+
+		for formnode in self.formnodes: # loop through formation nodes of the graph
+			N_form = self.DiGraph.out_degree(formnode) - self.DiGraph.in_degree(formnode)
+			for f in range(N_form):
+				for attr in attrs_dict.keys():
+					attrs_dict[attr].append([self.DiGraph.nodes[formnode][attr]])
+				formation_events+=1 # book-keeping
+				lifetime = walk_trajectory(formnode, 0.)
+				lifetimes.append(lifetime)
+
+		# algorithm checks
 		if(len(edges_visited) != len(set(edges_visited))):
 			raise ValueError("an edge has been visited more than once!")
-			return 0
-		elif(len(edges_visited) != graph.number_of_edges()):
-			raise ValueError(
-				"not all edges have been visited! Edges visited = {:s}, total edges = {:s}".format(
-					str(len(edges_visited)), str(graph.number_of_edges())
-				))
 			return 0
 		elif(len(lifetimes) != formation_events):
 			raise ValueError(
 				"number of lifetimes = {:s}, number of formation events = {:s}".format(
 					str(len(lifetimes)), str(formation_events)
+				))
+			return 0
+		elif(len(edges_visited) != self.DiGraph.number_of_edges()):
+			raise ValueError(
+				"not all edges have been visited! Edges visited = {:s}, total edges = {:s}".format(
+					str(len(edges_visited)), str(self.DiGraph.number_of_edges())
 				))
 			return 0
 
