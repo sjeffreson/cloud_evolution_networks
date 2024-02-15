@@ -3,6 +3,12 @@ Pipeline to generate a directed graph of the time evolution of all star-forming 
 
 As of February 2024, all code has been tested using Python 3.10.
 
+This is the pipeline used for molecular cloud identification, tracking and analysis in the following works:
+- [The role of galactic dynamics in shaping the physical properties of giant molecular clouds in Milky Way-like galaxies](https://ui.adsabs.harvard.edu/abs/2020MNRAS.498..385J/abstract)
+- [A scaling relation for the molecular cloud lifetime in Milky Way-like galaxies](https://ui.adsabs.harvard.edu/abs/2021MNRAS.505.1678J/abstract)
+- [Momentum feedback from marginally resolved H II regions in isolated disc galaxies](https://ui.adsabs.harvard.edu/abs/2021MNRAS.505.3470J/abstract)
+- [Clouds of Theseus: long-lived molecular clouds are composed of short-lived H2 molecules](https://ui.adsabs.harvard.edu/abs/2024MNRAS.527.7093J/abstract)
+
 ## `cloud_id.py`: Cloud identification
 
 ### Dependencies
