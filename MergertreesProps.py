@@ -237,7 +237,7 @@ class MergertreeProps:
 		attrs_dict['lifetime'] = np.array(lifetimes)
 
 		# save to disk as pickled dict
-		filename = DEFAULT_OUTPUT_DIR + "/mc_traj_{:s}.pkl".format(str(mc_no))
+		filename = DEFAULT_OUTPUT_DIR + '/mc_traj_{:03d}.pkl'.format(mc_no)
 		with open(filename, 'wb') as f:
 			pickle.dump(attrs_dict, f)
 		print("saved MC trajectory to {:s}".format(filename))
