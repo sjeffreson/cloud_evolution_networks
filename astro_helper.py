@@ -5,6 +5,8 @@ import h5py
 # standard units
 Gyr_to_Myr = 1E3
 Gyr_to_s = 3.15576E16
+Myr_to_s = 3.15576E13
+yr_to_s = 3.15576E7
 Msol_to_g = 1.99E33
 kpc_to_cm = 3.086E21
 pc_to_cm = 3.086E18

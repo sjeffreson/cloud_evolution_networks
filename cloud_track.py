@@ -12,8 +12,7 @@ import astro_helper as ah
 
 def main(input_path, snap_list, cloudfile_list, width, rsln_px):
 
-    # initialize empty graph
-    G = nx.DiGraph()
+    G = nx.DiGraph() # initialize empty graph
     min_cloud_id = 0
     prevtime = 0.
 
@@ -25,7 +24,7 @@ def main(input_path, snap_list, cloudfile_list, width, rsln_px):
         cloud_lens = [len(c['particles']) for c in cloud_attr_dicts]
         cloud_ids = [i for i in range(min_cloud_id, min_cloud_id+len(cloud_attr_dicts))]
 
-        # add nodes to graph
+        '''add nodes to the graph, with cloud-id keys'''
         G.add_nodes_from(cloud_ids)
         for id, attrs, in zip(cloud_ids, cloud_attr_dicts):
             nx.set_node_attributes(G, {id: {'time': snap_data['time']}})
@@ -33,13 +32,14 @@ def main(input_path, snap_list, cloudfile_list, width, rsln_px):
             nx.set_node_attributes(G, {id: attrs})
 
         if(snap_list.index(snap) == 0):
-            min_cloud_id = cloud_ids[-1]+1
+            min_cloud_id = int(np.max(cloud_ids))+1
             prevtime = snap_data['time']
             previnttime = int(np.round(snap_data['time']*ah.Gyr_to_Myr))
             continue
 
-        # predict positions of these clouds in the last snapshot, using the velocities
-        # of their particles, and bin for comparison to current masks
+        '''predict positions of these clouds in the LAST snapshot (back-projected)
+        using the velocities of their particles, and bin for comparison to current
+        masks'''
         deltat = (snap_data['time'] - prevtime) * ah.Gyr_to_s
 
         x_bin_edges = np.linspace(-width*ah.kpc_to_cm/2., width*ah.kpc_to_cm/2., rsln_px+1)
@@ -60,11 +60,23 @@ def main(input_path, snap_list, cloudfile_list, width, rsln_px):
                 else:
                     pixel_ids_proj[pxproj] = [id]
 
-        # now see which pixels are occupied by clouds in the previous snapshot, for comparison
-        # NOTE: only one previous cloud can occupy a pixel
+        '''now see which pixels are occupied by clouds in the previous snapshot, for comparison
+        NOTE: only one previous cloud can occupy a pixel'''
         G_inttimes = nx.get_node_attributes(G, 'inttime')
         G_masks = nx.get_node_attributes(G, 'mask')
         G_masks_prev = {id: mask for id, mask in G_masks.items() if G_inttimes[id] == previnttime}
+
+        '''check the previous IDs are distinct from the current IDs'''
+        if((len(G_masks_prev.keys())+len(cloud_ids)) != len(np.unique(list(G_masks_prev.keys())+cloud_ids))):
+            logger.critical(
+                "Error: total IDs = {:d}, total unique IDs = {:d} \n Current time: {:d} Previous time: {:d}".format(
+                    len(G_masks_prev.keys())+len(cloud_ids),
+                    len(np.unique(list(G_masks_prev.keys())+cloud_ids)),
+                    int(np.rint(snap_data['time']*ah.Gyr_to_Myr)),
+                    previnttime
+                )
+            )
+            exit()
 
         pixel_ids_prev = {} # pixels that contain part of a real cloud during the previous time-step
         for id, mask in G_masks_prev.items():
@@ -73,7 +85,7 @@ def main(input_path, snap_list, cloudfile_list, width, rsln_px):
             for pxprev in pxsprev:
                 pixel_ids_prev[pxprev] = id
 
-        # compare the pixel dictionaries and link cloud ids that share a pixel
+        '''compare the pixel dictionaries and link cloud ids that share a pixel'''
         new_edges = []
         for px, proj_ids in pixel_ids_proj.items():
             if px in pixel_ids_prev:
@@ -89,12 +101,12 @@ def main(input_path, snap_list, cloudfile_list, width, rsln_px):
             )
         )
 
-        # update the previous time
-        min_cloud_id = cloud_ids[-1]+1
+        '''update the previous time'''
+        min_cloud_id = int(np.max(cloud_ids))+1
         prevtime = snap_data['time']
         previnttime = int(np.round(snap_data['time']*ah.Gyr_to_Myr))
 
-    # save merger tree
+    '''save merger tree'''
     with open(os.path.join(input_path, "merger_tree_"+str(args.begsnapno)+"-"+str(args.endsnapno)+".pkl"), "wb") as f:
         pickle.dump(G, f, pickle.HIGHEST_PROTOCOL)
     logger.info(
@@ -148,11 +160,11 @@ if __name__ == "__main__":
         )
         exit()
 
-    # list of galaxy snapshot hdf5 snaps
+    '''list of galaxy snapshot hdf5 snaps'''
     snapnames = [snapname for snapname in sorted(glob.glob(os.path.join(args.input, args.search)))]
     cloudnames = [cloudname for cloudname in sorted(glob.glob(os.path.join(args.input, args.prefix+"*")))]
 
-    # cut out the image names that are not within the specified range
+    '''cut out the image names that are not within the specified range'''
     snapnames_cut = [
         snapname for snapname in snapnames 
         if(int(regex.findall(snapname.replace(".hdf5", ""))[-1]) >= int(args.begsnapno)) &
@@ -164,8 +176,8 @@ if __name__ == "__main__":
         (int(regex.findall(cloudname)[-1]) <= int(args.endsnapno))
     ]
 
-    # check that all snapshots and all cloud snaps exist within this range,
-    # at intervals of 1 Myr
+    '''check that all snapshots and all cloud snaps exist within this range,
+    at intervals of 1 Myr'''
     snapnos_cut = [regex.findall(snapname.replace(".hdf5", ""))[-1] for snapname in snapnames_cut]
     cloudnos_cut = [regex.findall(cloudname)[-1] for cloudname in cloudnames_cut]
     if not np.array_equal(np.array(snapnos_cut, dtype=int), np.arange(int(args.begsnapno), int(args.endsnapno)+1)):

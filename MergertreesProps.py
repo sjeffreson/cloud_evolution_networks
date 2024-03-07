@@ -171,7 +171,7 @@ class MergertreeProps:
 		of the network graph'''
 
 		def walk_trajectory(node: int, lifetime: float) -> int:
-			'''function to walk one trajectory through the graph'''
+			'''recursive function to walk one trajectory through the graph'''
 			children = self.DiGraph.successors(node)
 			parents = self.DiGraph.predecessors(node)
 			N_children = self.DiGraph.out_degree(node)
