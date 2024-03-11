@@ -14,7 +14,7 @@ This is the pipeline used for molecular cloud identification, tracking and analy
 ### Dependencies
 This script uses the [h5py](https://www.h5py.org/) package to read the galaxy snapshots (hdf5 format). It also uses the [astrodendro](https://github.com/dendrograms/astrodendro/tree/stable) package. Note that Astrodendro has not been updated for 8 years and so contains some deprecated features that might show up when the package is imported, but which are easily fixed.
 
-Note that Astrodendro is used because of the information it generates about the hierarchical structure of each cloud. This information is not currently analyzed or stored in this repo, but could easily be tracked by adding additional properties to the dictionaries defined in `cloud_id.py`. See the Astrodendro docs for all possibilities.
+Astrodendro is used because of the information it generates about the hierarchical structure of each cloud. This information is not currently analyzed or stored in this repo, but could easily be tracked by adding additional properties to the dictionaries defined in `cloud_id.py`. See the Astrodendro docs for all possibilities.
 
 ### Inputs
 - A set of hdf5 snapshots of an isolated galaxy simulation, containing a mesh of gas particles with centroid positions, velocities etc.
@@ -65,18 +65,28 @@ Where:
 - The resolution of the maps is `$MAP_RESOLUTION`
 These definitions and default values can all be accessed via `python3 cloud_id.py --help`
 
+### Checking outputs
+Lengths of the weakly-connected components of the graph, and a method for visualizing segments of the graph, can be found at `view_mergertree.ipynb`.
+
 ## Class to 'walk through' the network and output the lifetimes, mass evolution and merger history of clouds
 Once the evolution of all clouds in a galaxy has been 'tracked' to produce the cloud evolution graph, there are two obvious ways to define the evolution of an individual cloud:
-1. One cloud is a one weakly-connected component of the graph, including all its mergers and splits. I.e. clouds by definition do not interact with each other. If two objects merge, they are defined as part of the same cloud.
+1. One cloud is a one weakly-connected component of the graph, including all its mergers and splits. I.e. clouds by definition do not interact with each other. If two objects merge, they are defined as part of the same time-evolving cloud.
 2. One cloud is a straight component of the graph, containing no mergers or splits. I.e. if a cloud splits in two, it generates a new cloud that starts with a lifetime of 0. If a cloud merges, it consumes a cloud and ends its lifetime.
 
 Definition (1) is more physically-meaningful, but definition (2) is a better representation of the observable cloud population at a snapshot in time. That is, we don't know whether two clouds that appear separate in an observation will merge at a later time.
 
 It's therefore useful to characterize cloud evolution in both of the two ways above.
 
-### (1) Straight components or 'trajectories' of the graph
-The basic implementation of this algorithm is described in the Appendix of [Jeffreson et al. 2021a]([URL](https://ui.adsabs.harvard.edu/abs/2021MNRAS.505.1678J/abstract)https://ui.adsabs.harvard.edu/abs/2021MNRAS.505.1678J/abstract). There is a random choice associated with the path to take through a merger or a split, so this is a Monte Carlo 'walk' through the graph, repeated to obtain a representative set of cloud evolution 'trajectories' and their associated lifetime distribution.
+### (1) Weakly-connected components of the graph
+Evolution of cloud properties for clouds defined as weakly-connected graph components is calculated via `get_cloud_evol_wcs()` in the `MergertreesProps.py` class. This sums the extensive properties (such as mass, star formation rate etc.) and averages the intensive properties (such as velocity dispersion, pressure, etc.) over the nodes/clouds at each time, within each weakly-connected component.
 
-One Monte Carlo iteration of the algorithm used to return the lifetime and trajectories is given by XXX function.
+See the notebook `analyze_mergertree_wcs.ipynb` for an example of using this function to compute cloud lifetimes and mass evolution.
 
-A non-MC version that follows the most massive cloud through mergers and splits is given by YYY function.
+### (2) Straight components or 'trajectories' of the graph
+The basic implementation of this algorithm is described in the Appendix of [Jeffreson et al. 2021a]([URL](https://ui.adsabs.harvard.edu/abs/2021MNRAS.505.1678J/abstract)https://ui.adsabs.harvard.edu/abs/2021MNRAS.505.1678J/abstract), and is given by the function `save_cloud_evol_mc()` in the `MergertreesProps.py` class. Monte Carlo walkers travel through the directed cloud evolution graph, starting at 'creation nodes' (where the number of outgoing edges > incoming edges, i.e. clouds are created), and terminating at destruction nodes' (where the number of incoming edges > outgoing edges, i.e. clouds are destroyed). At mergers/splits, the path is determined randomly by sampling an option from a uniform distribution. This uniform distribution can easily be replaced by a selection that prioritizes paths of highest-mass, if desired.
+
+The resulting set of Monte Carlo trajectories traverses all nodes and all edges in the graph. Given the random sampling, the calculation should be repeated a few hundred times to obtain a well-sampled set of cloud evolution 'trajectories' and their associated lifetime distribution.
+
+See the short script `analyze_mergertree_mc.py` for an example of saving many MC trajectories in parallel. See the notebook `analyze_mc_trajectories.ipynb` for an example analysis of the resulting trajectories, a visualization of their lifetimes and mass evolution.
+
+
